@@ -1,11 +1,5 @@
 package com.pokemon.view
 
-import androidx.activity.ComponentActivity
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
-
-
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,6 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -35,10 +31,9 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.pokemon.model.PokemonBasic
 import com.pokemon.viewModel.PokemonListViewModel
-import org.koin.compose.getKoin
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PokemonListScreen(
     onPokemonClick: (Int) -> Unit,
@@ -65,70 +60,201 @@ fun PokemonListScreen(
             }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pullRefresh(pullRefreshState)
-    ) {
-        Column {
-            // Error message
-            error?.let { errorMessage ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = errorMessage,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = { viewModel.clearError() }) {
-                            Text("Dismiss")
-                        }
-                    }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Pokémon",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-            }
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .pullRefresh(pullRefreshState)
+        ) {
+            when {
 
-            // Pokemon List
-            LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(pokemonList) { pokemon ->
-                    PokemonItem(
-                        pokemon = pokemon,
-                        onClick = { onPokemonClick(pokemon.id)
+                pokemonList.isEmpty() && isLoading -> {
+                    InitialLoadingScreen()
+                }
 
 
-                        }
+                pokemonList.isEmpty() && error != null -> {
+                    EmptyErrorScreen(
+                        error = error!!,
+                        onRetry = { viewModel.loadPokemon() },
+                        onClearError = { viewModel.clearError() }
                     )
                 }
 
-                // Loading indicator at bottom
-                if (isLoading && pokemonList.isNotEmpty()) {
-                    item {
-                        LoadingItem()
+                // Main content when we have pokemon
+                else -> {
+                    Column {
+                        // Error message (for when we have pokemon but error occurred)
+                        error?.let { errorMessage ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = errorMessage,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = { viewModel.clearError() }) {
+                                        Text("Dismiss")
+                                    }
+                                }
+                            }
+                        }
+
+                        // Pokemon List
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(
+                                start = 8.dp,
+                                top = 4.dp,
+                                end = 8.dp,
+                                bottom = 32.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(pokemonList) { pokemon ->
+                                PokemonItem(
+                                    pokemon = pokemon,
+                                    onClick = { onPokemonClick(pokemon.id) }
+                                )
+                            }
+
+                            // Loading indicator at bottom (for pagination)
+                            if (isLoading && pokemonList.isNotEmpty()) {
+                                item {
+                                    LoadingItem()
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // Pull to refresh indicator
-        PullRefreshIndicator(
-            refreshing = isRefreshing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
+            // Pull to refresh indicator
+            PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+    }
+}
+
+// ADDED: Initial loading screen
+@Composable
+fun InitialLoadingScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+            strokeWidth = 4.dp,
+            color = MaterialTheme.colorScheme.primary
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Loading Pokémon...",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Gotta catch 'em all!",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// ADDED: Empty error screen
+@Composable
+fun EmptyErrorScreen(
+    error: String,
+    onRetry: () -> Unit,
+    onClearError: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = androidx.compose.material.icons.Icons.Default.Clear,
+            contentDescription = "Error",
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.error
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Oops! Something went wrong",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = error,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onClearError
+            ) {
+                Text("Dismiss")
+            }
+
+            Button(
+                onClick = onRetry
+            ) {
+                Text("Try Again")
+            }
+        }
     }
 }
 
@@ -190,7 +316,7 @@ fun PokemonItem(
 
             // Arrow Icon
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.KeyboardArrowRight,
+                imageVector = Icons.Default.KeyboardArrowRight,
                 contentDescription = "View Details",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
